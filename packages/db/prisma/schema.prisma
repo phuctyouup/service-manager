@@ -1,0 +1,467 @@
+// ============================================
+// FSM/packages/db/prisma/schema.prisma
+// Final Locked Schema
+// ============================================
+
+model Account {
+  id              String           @id @default(uuid())
+  accountNumber   String           @unique
+  status          AccountStatus    @default(ACTIVE)
+  type            AccountType      @default(RESIDENTIAL)
+  taxExempt       Boolean          @default(false)
+  
+  customers       Customer[]
+  addresses       Address[]
+  contacts        Contact[]        // Includes phone numbers and emails
+  estimates       Estimate[]
+  jobs            Job[]
+  documents       Document[]
+  maintenanceSchedules MaintenanceSchedule[]
+  communications  Communication[]
+  
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  createdBy       String?
+  
+  @@map("accounts")
+}
+
+enum AccountStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  CLOSED
+}
+
+enum AccountType {
+  RESIDENTIAL
+  COMMERCIAL
+  PROPERTY_MANAGEMENT
+}
+
+// ============================================
+// CUSTOMER
+// ============================================
+
+model Customer {
+  id              String           @id @default(uuid())
+  accountId       String
+  firstName       String
+  lastName        String
+  preferredName   String?
+  isPrimary       Boolean          @default(false)
+  relationship    String?
+  
+  account         Account          @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  portalUserId    String?          @unique
+  portalUser      PortalUser?      @relation(fields: [portalUserId], references: [id])
+  
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @default(now()) @updatedAt
+  
+  @@map("customers")
+  @@index([accountId])
+  @@index([lastName, firstName])
+}
+
+// ============================================
+// CONTACTS
+// ============================================
+
+model Contact {
+  id              String           @id @default(uuid())
+  accountId       String
+  type            ContactType
+  value           String           // email or phone
+  isPrimary       Boolean          @default(false)
+  canText         Boolean          @default(true) // Only applies to phone
+  isVerified      Boolean          @default(false)
+  
+  account         Account          @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  
+  createdAt       DateTime         @default(now())
+  
+  @@map("contacts")
+  @@unique([accountId, value])
+  @@index([value])
+}
+
+enum ContactType {
+  EMAIL
+  PHONE
+}
+
+// ============================================
+// PORTAL USERS
+// ============================================
+
+model PortalUser {
+  id              String           @id @default(uuid())
+  email           String           @unique
+  passwordHash    String
+  customer        Customer?
+  lastLogin       DateTime?
+  isActive        Boolean          @default(true)
+  
+  createdAt       DateTime         @default(now())
+  
+  @@map("portal_users")
+}
+
+// ============================================
+// STAFF & USERS
+// ============================================
+
+model User {
+  id              String           @id @default(uuid())
+  email           String           @unique
+  name            String
+  role            UserRole
+  isActive        Boolean          @default(true)
+  
+  salesMade       Estimate[]       @relation("Salesperson")
+  ticketsCreated  Job[]            @relation("CSRCreator")
+  assignedVisits  Visit[]          @relation("TechnicianAssignment")
+  createdAt       DateTime         @default(now())
+  
+  @@map("users")
+}
+
+enum UserRole {
+  ADMIN
+  SALESMAN
+  CSR
+  TECHNICIAN
+  DISPATCHER
+}
+
+// ============================================
+// ESTIMATES
+// ============================================
+
+model Estimate {
+  id              String           @id @default(uuid())
+  accountId       String
+  salesmanId      String
+  status          EstimateStatus   @default(PENDING)
+  totalAmount     Decimal          @db.Decimal(10, 2)
+  discountApplied Decimal          @default(0)
+  items           Json
+  
+  account         Account          @relation(fields: [accountId], references: [id])
+  salesman        User             @relation("Salesperson", fields: [salesmanId], references: [id])
+  job             Job?
+  followUps       FollowUp[]
+  
+  createdAt       DateTime         @default(now())
+  
+  @@map("estimates")
+  @@index([accountId])
+}
+
+enum EstimateStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
+// ============================================
+// JOBS & VISITS
+// ============================================
+
+model Job {
+  id              String           @id @default(uuid())
+  estimateId      String?          @unique
+  accountId       String
+  csrId           String
+  title           String
+  description     String?          @db.Text
+  status          JobStatus        @default(SCHEDULED)
+  
+  account         Account          @relation(fields: [accountId], references: [id])
+  estimate        Estimate?        @relation(fields: [estimateId], references: [id])
+  csr             User             @relation("CSRCreator", fields: [csrId], references: [id])
+  
+  visits          Visit[]
+  documents       Document[]
+  notes           Note[]
+  
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @default(now()) @updatedAt
+  
+  @@map("jobs")
+  @@index([accountId])
+  @@index([status])
+}
+
+enum JobStatus {
+  TICKET_CREATED
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model Visit {
+  id              String           @id @default(uuid())
+  jobId           String
+  technicianId    String
+  startTime       DateTime
+  endTime         DateTime
+  summary         String?          @db.Text
+  
+  job             Job              @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  technician      User             @relation("TechnicianAssignment", fields: [technicianId], references: [id])
+  
+  @@map("visits")
+  @@index([technicianId, startTime])
+}
+
+// ============================================
+// FOLLOW UPS & MAINTENANCE
+// ============================================
+
+model FollowUp {
+  id              String           @id @default(uuid())
+  estimateId      String
+  scheduledAt     DateTime
+  completedAt     DateTime?
+  notes           String?
+  
+  estimate        Estimate         @relation(fields: [estimateId], references: [id])
+  
+  @@map("follow_ups")
+}
+
+model MaintenanceSchedule {
+  id              String           @id @default(uuid())
+  accountId       String
+  serviceType     String
+  lastServiceDate DateTime?
+  nextServiceDate DateTime
+  frequency       String
+  isActive        Boolean          @default(true)
+  
+  account         Account          @relation(fields: [accountId], references: [id])
+  
+  @@map("maintenance_schedules")
+  @@index([accountId])
+  @@index([nextServiceDate])
+}
+
+// ============================================
+// DOCUMENTS & CHUNKS
+// ============================================
+
+model Document {
+  id              String           @id @default(uuid())
+  jobId           String?
+  accountId       String
+  name            String
+  fileUrl         String
+  fileType        String
+  category        DocType
+  processed       Boolean          @default(false)
+  chunks          DocumentChunk[]
+  
+  account         Account          @relation(fields: [accountId], references: [id])
+  job             Job?             @relation(fields: [jobId], references: [id])
+  uploadedBy      String?
+  
+  createdAt       DateTime         @default(now())
+  
+  @@map("documents")
+  @@index([accountId])
+}
+
+enum DocType {
+  CONTRACT
+  RECEIPT
+  INSTALL_PHOTO
+  WARRANTY
+  INVOICE
+}
+
+model DocumentChunk {
+  id              String           @id @default(uuid())
+  documentId      String
+  content         String           @db.Text
+  embedding       Unsupported("vector(1536)")? 
+  chunkIndex      Int
+  metadata        Json?
+  
+  document        Document         @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  
+  @@map("document_chunks")
+  @@index([documentId])
+}
+
+// ============================================
+// COMMUNICATIONS
+// ============================================
+
+model Communication {
+  id              String           @id @default(uuid())
+  accountId       String
+  type            CommType
+  direction       CommDirection
+  subject         String?
+  body            String           @db.Text
+  sentBy          String?
+  sentTo          String?
+  status          CommStatus       @default(SENT)
+  
+  account         Account          @relation(fields: [accountId], references: [id])
+  
+  createdAt       DateTime         @default(now())
+  
+  @@map("communications")
+  @@index([accountId])
+}
+
+enum CommType {
+  EMAIL
+  SMS
+  CALL
+  PORTAL_MESSAGE
+}
+
+enum CommDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum CommStatus {
+  DRAFT
+  SENT
+  FAILED
+  DELIVERED
+  OPENED
+  CLICKED
+}
+
+// ============================================
+// AUDIT LOG
+// ============================================
+
+model AuditLog {
+  id              String           @id @default(uuid())
+  userId          String
+  entityType      String
+  entityId        String
+  action          String
+  changes         Json?
+  timestamp       DateTime         @default(now())
+  
+  @@map("audit_logs")
+  @@index([entityType, entityId])
+  @@index([userId])
+}
+
+// ============================================
+// CONVERSATION MEMORY
+// ============================================
+
+model Conversation {
+  id              String           @id @default(uuid())
+  accountId       String?
+  userId          String?
+  messages        Message[]
+  startedAt       DateTime         @default(now())
+  
+  @@map("conversations")
+}
+
+model Message {
+  id              String           @id @default(uuid())
+  conversationId  String
+  role            MessageRole
+  content         String           @db.Text
+  metadata        Json?
+  
+  conversation    Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  
+  createdAt       DateTime         @default(now())
+  
+  @@map("messages")
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+// ============================================
+// NOTES
+// ============================================
+
+model Note {
+  id              String           @id @default(uuid())
+  jobId           String
+  authorId        String
+  content         String           @db.Text
+  customerVisible Boolean          @default(false)
+  
+  job             Job              @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  
+  createdAt       DateTime         @default(now())
+  
+  @@map("notes")
+}
+
+// ============================================
+// PURCHASE ORDERS
+// ============================================
+
+model PurchaseOrder {
+  id            String        @id @default(uuid())
+  poNumber      String        @unique
+  vendor        String
+  technicianId  String
+  jobId         String?
+  status        POStatus     @default(PENDING)
+  createdBy     String
+  approvedAt    DateTime?
+  completedAt   DateTime?
+  
+  items         Json
+  equipment     Json?
+  
+  receipts      Document[]    @relation("POReceipts")
+  photos        Document[]    @relation("POPhotos")
+  contracts     Document[]    @relation("POContracts")
+  
+  notes         PONote[]
+  
+  technician    User          @relation("TechnicianPOs", fields: [technicianId], references: [id])
+  job           Job?          @relation(fields: [jobId], references: [id])
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @default(now()) @updatedAt
+  
+  @@map("purchase_orders")
+  @@index([technicianId])
+  @@index([status])
+}
+
+model PONote {
+  id            String        @id @default(uuid())
+  poId          String
+  authorId      String
+  content       String        @db.Text
+  customerVisible Boolean     @default(false)
+  
+  po            PurchaseOrder @relation(fields: [poId], references: [id], onDelete: Cascade)
+  createdAt     DateTime      @default(now())
+  
+  @@map("po_notes")
+  @@index([poId])
+}
+
+enum POStatus {
+  PENDING
+  APPROVED
+  COMPLETED
+  CANCELLED
+}

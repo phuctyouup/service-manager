@@ -1,0 +1,477 @@
+// FSM/packages/db/prisma/schema.prisma
+// ============================================
+// CORE IDENTITY - Everything separate for flexible searching
+// ============================================
+
+model Account {
+  id              String           @id @default(uuid())
+  accountNumber   String           @unique // Auto-generated: ACC-00001
+  status          AccountStatus    @default(ACTIVE)
+  type            AccountType      @default(RESIDENTIAL)
+  taxExempt       Boolean          @default(false)
+  
+  // Relations - An account can have multiple of each
+  customers       Customer[]
+  addresses       Address[]
+  phoneNumbers    PhoneNumber[]
+  emails          Email[]
+  
+  // Business data tied to account
+  estimates       Estimate[]
+  jobs            Job[]
+  documents       Document[]
+  maintenanceSchedules MaintenanceSchedule[]
+  communications  Communication[]
+  
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  createdBy       String?          // User ID who created
+  
+  @@map("accounts")
+}
+
+enum AccountStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  CLOSED
+}
+
+enum AccountType {
+  RESIDENTIAL
+  COMMERCIAL
+  PROPERTY_MANAGEMENT
+}
+
+// ============================================
+// CUSTOMER - People associated with accounts
+// ============================================
+
+model Customer {
+  id              String           @id @default(uuid())
+  accountId       String
+  firstName       String
+  lastName        String
+  preferredName   String?
+  isPrimary       Boolean          @default(false) // Primary contact
+  relationship    String?          // "Owner", "Tenant", "Property Manager"
+  
+  account         Account          @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  
+  // Optional portal access
+  portalUserId    String?          @unique
+  portalUser      PortalUser?      @relation(fields: [portalUserId], references: [id])
+  
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  
+  @@map("customers")
+  @@index([accountId])
+  @@index([lastName, firstName])
+}
+
+// ============================================
+// CONTACT METHODS - All separate for flexibility
+// ============================================
+
+model Email {
+  id              String           @id @default(uuid())
+  accountId       String
+  email           String
+  type            EmailType        @default(PERSONAL)
+  isPrimary       Boolean          @default(false)
+  isVerified      Boolean          @default(false)
+  
+  account         Account          @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  
+  createdAt       DateTime         @default(now())
+  
+  @@map("emails")
+  @@unique([accountId, email]) // Prevent duplicate emails per account
+  @@index([email]) // Fast lookup by email
+}
+
+enum EmailType {
+  PERSONAL
+  WORK
+  BILLING
+}
+
+model PhoneNumber {
+  id              String           @id @default(uuid())
+  accountId       String
+  number          String           // Store as E.164: +15551234567
+  type            PhoneType        @default(MOBILE)
+  isPrimary       Boolean          @default(false)
+  canText         Boolean          @default(true)
+  isVerified      Boolean          @default(false)
+  
+  account         Account          @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  
+  createdAt       DateTime         @default(now())
+  
+  @@map("phone_numbers")
+  @@unique([accountId, number])
+  @@index([number]) // Fast lookup by phone
+}
+
+enum PhoneType {
+  MOBILE
+  HOME
+  WORK
+  FAX
+}
+
+model Address {
+  id              String           @id @default(uuid())
+  accountId       String
+  type            AddressType      @default(SERVICE)
+  
+  // Address components
+  street1         String
+  street2         String?
+  city            String
+  state           String
+  zipCode         String
+  country         String           @default("USA")
+  
+  // Geocoding for routing
+  latitude        Decimal?         @db.Decimal(10, 8)
+  longitude       Decimal?         @db.Decimal(11, 8)
+  
+  isPrimary       Boolean          @default(false)
+  
+  account         Account          @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  
+  @@map("addresses")
+  @@index([accountId])
+  @@index([zipCode]) // For territory routing
+}
+
+enum AddressType {
+  SERVICE
+  BILLING
+  MAILING
+  PROPERTY
+}
+
+// ============================================
+// PORTAL ACCESS - Separate from Customer
+// ============================================
+
+model PortalUser {
+  id              String           @id @default(uuid())
+  email           String           @unique
+  passwordHash    String
+  customer        Customer?
+  lastLogin       DateTime?
+  isActive        Boolean          @default(true)
+  
+  createdAt       DateTime         @default(now())
+  
+  @@map("portal_users")
+}
+
+// ============================================
+// STAFF & IDENTITY
+// ============================================
+
+model User {
+  id              String           @id @default(uuid())
+  email           String           @unique
+  name            String
+  role            UserRole
+  isActive        Boolean          @default(true)
+  
+  salesMade       Estimate[]       @relation("Salesperson")
+  ticketsCreated  Job[]            @relation("CSRCreator")
+  assignedVisits  Visit[]          @relation("TechnicianAssignment")
+  
+  createdAt       DateTime         @default(now())
+  
+  @@map("users")
+}
+
+enum UserRole {
+  ADMIN
+  SALESMAN
+  CSR
+  TECHNICIAN
+  DISPATCHER
+}
+
+// ============================================
+// SALES & ESTIMATES
+// ============================================
+
+model Estimate {
+  id              String           @id @default(uuid())
+  accountId       String           // Changed from customerId
+  salesmanId      String
+  status          EstimateStatus   @default(PENDING)
+  totalAmount     Decimal          @db.Decimal(10, 2)
+  discountApplied Decimal          @default(0)
+  items           Json
+  
+  account         Account          @relation(fields: [accountId], references: [id])
+  salesman        User             @relation("Salesperson", fields: [salesmanId], references: [id])
+  job             Job?
+  followUps       FollowUp[]
+  
+  createdAt       DateTime         @default(now())
+  
+  @@map("estimates")
+  @@index([accountId])
+}
+
+enum EstimateStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
+// ============================================
+// OPERATIONS & SCHEDULING
+// ============================================
+
+model Job {
+  id              String           @id @default(uuid())
+  estimateId      String?          @unique
+  accountId       String           // Changed from customerId
+  csrId           String
+  title           String
+  description     String?          @db.Text
+  status          JobStatus        @default(SCHEDULED)
+  
+  account         Account          @relation(fields: [accountId], references: [id])
+  estimate        Estimate?        @relation(fields: [estimateId], references: [id])
+  csr             User             @relation("CSRCreator", fields: [csrId], references: [id])
+  
+  visits          Visit[]
+  documents       Document[]
+  notes           Note[]
+  
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  
+  @@map("jobs")
+  @@index([accountId])
+  @@index([status])
+}
+
+enum JobStatus {
+  TICKET_CREATED
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model Visit {
+  id              String           @id @default(uuid())
+  jobId           String
+  technicianId    String
+  startTime       DateTime
+  endTime         DateTime
+  summary         String?          @db.Text
+  
+  job             Job              @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  technician      User             @relation("TechnicianAssignment", fields: [technicianId], references: [id])
+  
+  @@map("visits")
+  @@index([technicianId, startTime])
+}
+
+// ============================================
+// CUSTOMER CARE & AUTOMATION
+// ============================================
+
+model FollowUp {
+  id              String           @id @default(uuid())
+  estimateId      String
+  scheduledAt     DateTime
+  completedAt     DateTime?
+  notes           String?
+  
+  estimate        Estimate         @relation(fields: [estimateId], references: [id])
+  
+  @@map("follow_ups")
+}
+
+model MaintenanceSchedule {
+  id              String           @id @default(uuid())
+  accountId       String           // Changed from customerId
+  serviceType     String
+  lastServiceDate DateTime?
+  nextServiceDate DateTime
+  frequency       String
+  isActive        Boolean          @default(true)
+  
+  account         Account          @relation(fields: [accountId], references: [id])
+  
+  @@map("maintenance_schedules")
+  @@index([accountId])
+  @@index([nextServiceDate])
+}
+
+// ============================================
+// DOCUMENTS & BETTY'S RAG SYSTEM
+// ============================================
+
+model Document {
+  id              String           @id @default(uuid())
+  jobId           String?
+  accountId       String           // Changed from customerId
+  name            String
+  fileUrl         String           // MinIO bucket path
+  fileType        String
+  category        DocType
+  
+  // For Betty's processing
+  processed       Boolean          @default(false)
+  chunks          DocumentChunk[]
+  
+  account         Account          @relation(fields: [accountId], references: [id])
+  job             Job?             @relation(fields: [jobId], references: [id])
+  uploadedBy      String?
+  
+  createdAt       DateTime         @default(now())
+  
+  @@map("documents")
+  @@index([accountId])
+}
+
+enum DocType {
+  CONTRACT
+  RECEIPT
+  INSTALL_PHOTO
+  WARRANTY
+  INVOICE
+}
+
+model DocumentChunk {
+  id              String           @id @default(uuid())
+  documentId      String
+  content         String           @db.Text
+  embedding       Unsupported("vector(1536)")? // pgvector
+  chunkIndex      Int
+  metadata        Json?
+  
+  document        Document         @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  
+  @@map("document_chunks")
+  @@index([documentId])
+}
+
+// ============================================
+// COMMUNICATIONS TRACKING
+// ============================================
+
+model Communication {
+  id              String           @id @default(uuid())
+  accountId       String           // Changed from customerId
+  type            CommType
+  direction       CommDirection
+  subject         String?
+  body            String           @db.Text
+  sentBy          String?          // User ID or "BETTY_AI"
+  sentTo          String?          // Email or phone used
+  status          CommStatus       @default(SENT)
+  
+  account         Account          @relation(fields: [accountId], references: [id])
+  
+  createdAt       DateTime         @default(now())
+  
+  @@map("communications")
+  @@index([accountId])
+}
+
+enum CommType {
+  EMAIL
+  SMS
+  CALL
+  PORTAL_MESSAGE
+}
+
+enum CommDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum CommStatus {
+  DRAFT
+  SENT
+  FAILED
+  DELIVERED
+  OPENED
+  CLICKED
+}
+
+// ============================================
+// AUDIT TRAIL
+// ============================================
+
+model AuditLog {
+  id              String           @id @default(uuid())
+  userId          String
+  entityType      String           // "Account", "Job", "Document"
+  entityId        String
+  action          String           // "CREATED", "UPDATED", "DELETED"
+  changes         Json?
+  timestamp       DateTime         @default(now())
+  
+  @@map("audit_logs")
+  @@index([entityType, entityId])
+  @@index([userId])
+}
+
+// ============================================
+// BETTY'S CONVERSATION MEMORY
+// ============================================
+
+model Conversation {
+  id              String           @id @default(uuid())
+  accountId       String?          // Link to account if known
+  userId          String?          // Portal user or staff member
+  messages        Message[]
+  startedAt       DateTime         @default(now())
+  
+  @@map("conversations")
+}
+
+model Message {
+  id              String           @id @default(uuid())
+  conversationId  String
+  role            MessageRole
+  content         String           @db.Text
+  metadata        Json?
+  
+  conversation    Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  
+  createdAt       DateTime         @default(now())
+  
+  @@map("messages")
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+model Note {
+  id              String           @id @default(uuid())
+  jobId           String
+  authorId        String
+  content         String           @db.Text
+  
+  job             Job              @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  
+  createdAt       DateTime         @default(now())
+  
+  @@map("notes")
+}

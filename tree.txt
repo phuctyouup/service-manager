@@ -1,0 +1,180 @@
+.
+├── apps
+│   ├── api
+│   │   ├── src
+│   │   │   ├── config
+│   │   │   │   ├── env.ts
+│   │   │   │   └── index.ts
+│   │   │   ├── controllers
+│   │   │   ├── middleware
+│   │   │   │   ├── auth.ts
+│   │   │   │   ├── errorHandler.ts
+│   │   │   │   ├── rbac.ts
+│   │   │   │   └── requestContext.ts
+│   │   │   ├── routes
+│   │   │   │   ├── accounts.routes.ts
+│   │   │   │   ├── accounts.ts
+│   │   │   │   ├── auth.routes.ts
+│   │   │   │   ├── betty.routes.ts
+│   │   │   │   ├── customers.routes.ts
+│   │   │   │   ├── documents.routes.ts
+│   │   │   │   ├── index.ts
+│   │   │   │   └── jobs.routes.ts
+│   │   │   ├── services
+│   │   │   ├── app.ts
+│   │   │   ├── index.ts
+│   │   │   └── server.ts
+│   │   ├── package.json
+│   │   ├── README.md
+│   │   └── tsconfig.json
+│   ├── web
+│   │   ├── src
+│   │   │   ├── api
+│   │   │   ├── app
+│   │   │   ├── components
+│   │   │   ├── hooks
+│   │   │   ├── pages
+│   │   │   └── main.tsx
+│   │   ├── package.json
+│   │   ├── README.md
+│   │   ├── tsconfig.json
+│   │   └── vite.config.ts
+│   └── worker
+│       ├── src
+│       │   ├── processors
+│       │   │   ├── chunkDocument.ts
+│       │   │   ├── embedDocument.ts
+│       │   │   └── parsePdf.ts
+│       │   ├── queues
+│       │   │   ├── document.queue.ts
+│       │   │   ├── embedding.queue.ts
+│       │   │   └── notification.queue.ts
+│       │   └── index.ts
+│       ├── package.json
+│       ├── README.md
+│       └── tsconfig.json
+├── infra
+│   ├── docker
+│   │   ├── docker-compose.yml
+│   │   ├── Dockerfile.api
+│   │   └── Dockerfile.worker
+│   ├── minio
+│   │   └── buckets.txt
+│   ├── postgres
+│   │   └── init.sql
+│   └── redis
+│       └── redis.conf
+├── packages
+│   ├── ai
+│   │   ├── src
+│   │   │   ├── memory
+│   │   │   ├── prompts
+│   │   │   ├── retrievers
+│   │   │   ├── tools
+│   │   │   ├── betty.ts
+│   │   │   └── index.ts
+│   │   ├── package.json
+│   │   ├── README.md
+│   │   └── tsconfig.json
+│   ├── core
+│   │   ├── src
+│   │   │   ├── context
+│   │   │   │   ├── createContext.ts
+│   │   │   │   └── RequestContext.ts
+│   │   │   ├── domain
+│   │   │   │   ├── account
+│   │   │   │   │   └── index.ts
+│   │   │   │   ├── communication
+│   │   │   │   │   └── index.ts
+│   │   │   │   ├── customer
+│   │   │   │   │   └── index.ts
+│   │   │   │   ├── document
+│   │   │   │   │   └── index.ts
+│   │   │   │   ├── job
+│   │   │   │   │   └── index.ts
+│   │   │   │   ├── Account.ts
+│   │   │   │   ├── Jobs.ts
+│   │   │   │   ├── User.ts
+│   │   │   │   └── Visits.ts
+│   │   │   ├── errors
+│   │   │   │   ├── AuthorizationError.ts
+│   │   │   │   ├── ConflictError.ts
+│   │   │   │   └── DomainError.ts
+│   │   │   ├── events
+│   │   │   │   └── Event.ts
+│   │   │   ├── permissions
+│   │   │   ├── services
+│   │   │   │   ├── accountService.ts
+│   │   │   │   ├── jobService.ts
+│   │   │   │   └── scheduleService.ts
+│   │   │   └── index.ts
+│   │   ├── package.json
+│   │   ├── README.md
+│   │   └── tsconfig.json
+│   ├── db
+│   │   ├── prisma
+│   │   │   ├── migrations
+│   │   │   ├── schema.prisma
+│   │   │   ├── schema.prisma.bak
+│   │   │   ├── schema.prisma.bak.bak
+│   │   │   └── seed.ts
+│   │   ├── src
+│   │   │   ├── client.ts
+│   │   │   ├── index.ts
+│   │   │   └── transactions.ts
+│   │   ├── package.json
+│   │   ├── README.md
+│   │   └── tsconfig.json
+│   ├── logger
+│   │   ├── src
+│   │   │   ├── index.ts
+│   │   │   └── logger.ts
+│   │   ├── package.json
+│   │   ├── README.md
+│   │   └── tsconfig.json
+│   ├── queue
+│   │   ├── src
+│   │   │   ├── client.ts
+│   │   │   ├── index.ts
+│   │   │   ├── payloads.ts
+│   │   │   └── queues.ts
+│   │   ├── package.json
+│   │   ├── README.md
+│   │   └── tsconfig.json
+│   ├── schemas
+│   │   ├── src
+│   │   │   ├── document.schema.ts
+│   │   │   ├── index.ts
+│   │   │   └── job.schema.ts
+│   │   ├── package.json
+│   │   ├── README.md
+│   │   └── tsconfig.json
+│   └── storage
+│       ├── src
+│       │   ├── buckets.ts
+│       │   ├── client.ts
+│       │   ├── index.ts
+│       │   └── paths.ts
+│       ├── package.json
+│       ├── README.md
+│       └── tsconfig.json
+├── scripts
+│   ├── migrate
+│   │   └── run.sh
+│   ├── refactor
+│   │   └── update-imports.sh
+│   ├── seed
+│   │   └── run.sh
+│   └── setup
+│       └── init.sh
+├── deploy-all-files.sh
+├── LICENSE
+├── package.json
+├── pnpm-lock.yaml
+├── pnpm-workspace.yaml
+├── README.md
+├── tree.txt
+├── tsconfig.base.json
+└── turbo.json
+
+62 directories, 116 files

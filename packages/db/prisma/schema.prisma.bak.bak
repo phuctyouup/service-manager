@@ -1,0 +1,420 @@
+// ============================================
+// CORE ACCOUNT (BUSINESS ENTITY)
+// ============================================
+
+model Account {
+  id            String        @id @default(uuid())
+  accountNumber String        @unique
+  status        AccountStatus @default(ACTIVE)
+  type          AccountType   @default(RESIDENTIAL)
+  taxExempt     Boolean       @default(false)
+
+  contacts      Contact[]
+  properties    Property[]
+  emails        Email[]       // shared / billing
+  phoneNumbers  PhoneNumber[] // shared / billing
+
+  estimates     Estimate[]
+  jobs          Job[]
+  documents     Document[]
+  communications Communication[]
+  maintenanceSchedules MaintenanceSchedule[]
+
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@map("accounts")
+}
+
+enum AccountStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  CLOSED
+}
+
+enum AccountType {
+  RESIDENTIAL
+  COMMERCIAL
+  PROPERTY_MANAGEMENT
+}
+
+// ============================================
+// CONTACTS (PEOPLE)
+// ============================================
+
+model Contact {
+  id              String   @id @default(uuid())
+  accountId       String
+  firstName       String
+  lastName        String
+  role            ContactRole
+  preferredName   String?
+  isPrimary       Boolean  @default(false)
+
+  communicationPreference Json?
+
+  account         Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  emails          Email[]
+  phoneNumbers    PhoneNumber[]
+
+  portalUser      PortalUser?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([accountId])
+  @@index([lastName, firstName])
+  @@map("contacts")
+}
+
+enum ContactRole {
+  OWNER
+  TENANT
+  PROPERTY_MANAGER
+  BILLING
+  ONSITE
+}
+
+// ============================================
+// CONTACT METHODS (CONTACT-FIRST)
+// ============================================
+
+model Email {
+  id        String   @id @default(uuid())
+  email     String
+  type      EmailType
+  isPrimary Boolean @default(false)
+  isVerified Boolean @default(false)
+
+  contactId String?
+  accountId String?
+
+  contact   Contact? @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  account   Account? @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([email])
+  @@index([email])
+  @@map("emails")
+}
+
+enum EmailType {
+  PERSONAL
+  WORK
+  BILLING
+}
+
+model PhoneNumber {
+  id        String   @id @default(uuid())
+  number    String   // E.164
+  type      PhoneType
+  canText   Boolean  @default(true)
+  isPrimary Boolean  @default(false)
+  isVerified Boolean @default(false)
+
+  contactId String?
+  accountId String?
+
+  contact   Contact? @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  account   Account? @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([number])
+  @@index([number])
+  @@map("phone_numbers")
+}
+
+enum PhoneType {
+  MOBILE
+  HOME
+  WORK
+  FAX
+}
+
+// ============================================
+// PROPERTIES (SERVICE LOCATIONS)
+// ============================================
+
+model Property {
+  id          String   @id @default(uuid())
+  accountId   String
+  nickname    String?
+  notes       String?
+
+  address     Address?
+  jobs        Job[]
+  documents   Document[]
+
+  account     Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([accountId])
+  @@map("properties")
+}
+
+model Address {
+  id        String   @id @default(uuid())
+  propertyId String @unique
+
+  street1   String
+  street2   String?
+  city      String
+  state     String
+  zipCode   String
+  country   String @default("USA")
+
+  latitude  Decimal? @db.Decimal(10, 8)
+  longitude Decimal? @db.Decimal(11, 8)
+
+  property  Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([zipCode])
+  @@map("addresses")
+}
+
+// ============================================
+// STAFF USERS
+// ============================================
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String
+  role      UserRole
+  isActive  Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+
+  @@map("users")
+}
+
+enum UserRole {
+  ADMIN
+  CSR
+  SALESMAN
+  TECHNICIAN
+  DISPATCHER
+}
+
+// ============================================
+// ESTIMATES
+// ============================================
+
+model Estimate {
+  id              String         @id @default(uuid())
+  estimateNumber  Int            @unique
+  accountId       String
+  propertyId      String
+  salesmanId      String
+  status          EstimateStatus @default(DRAFT)
+
+  subtotal        Decimal        @db.Decimal(10,2)
+  discount        Decimal        @default(0)
+  tax             Decimal        @default(0)
+  total           Decimal        @db.Decimal(10,2)
+
+  lineItems       Json
+  referralSourceId String?
+
+  account         Account        @relation(fields: [accountId], references: [id])
+  property        Property       @relation(fields: [propertyId], references: [id])
+  salesman        User           @relation(fields: [salesmanId], references: [id])
+  job             Job?
+
+  createdAt       DateTime       @default(now())
+  approvedAt      DateTime?
+
+  @@index([accountId])
+  @@map("estimates")
+}
+
+enum EstimateStatus {
+  DRAFT
+  SENT
+  APPROVED
+  DECLINED
+  EXPIRED
+}
+
+// ============================================
+// JOBS & VISITS
+// ============================================
+
+model Job {
+  id          String   @id @default(uuid())
+  jobNumber   Int      @unique
+  accountId   String
+  propertyId  String
+  estimateId  String?
+  csrId       String
+  status      JobStatus @default(TICKET_CREATED)
+  title       String
+  description String?
+
+  account     Account  @relation(fields: [accountId], references: [id])
+  property    Property @relation(fields: [propertyId], references: [id])
+  estimate    Estimate? @relation(fields: [estimateId], references: [id])
+  csr         User     @relation(fields: [csrId], references: [id])
+
+  visits      Visit[]
+  purchaseOrders PurchaseOrder[]
+  documents   Document[]
+  notes       Note[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([status])
+  @@map("jobs")
+}
+
+enum JobStatus {
+  TICKET_CREATED
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model Visit {
+  id           String   @id @default(uuid())
+  jobId        String
+  technicianId String
+  startTime    DateTime
+  endTime      DateTime
+  summary      String?
+
+  job          Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  technician   User     @relation(fields: [technicianId], references: [id])
+
+  @@index([technicianId, startTime])
+  @@map("visits")
+}
+
+// ============================================
+// PURCHASE ORDERS
+// ============================================
+
+model PurchaseOrder {
+  id            String   @id @default(uuid())
+  poNumber      Int      @unique
+  jobId         String
+  technicianId  String
+  vendor        String
+  status        POStatus @default(OPEN)
+  totalAmount   Decimal? @db.Decimal(10,2)
+  notes         String?
+
+  job           Job      @relation(fields: [jobId], references: [id])
+  technician    User     @relation(fields: [technicianId], references: [id])
+
+  createdAt     DateTime @default(now())
+  closedAt      DateTime?
+
+  @@map("purchase_orders")
+}
+
+enum POStatus {
+  OPEN
+  SUBMITTED
+  CLOSED
+  CANCELLED
+}
+
+// ============================================
+// DOCUMENTS & RAG
+// ============================================
+
+model Document {
+  id          String   @id @default(uuid())
+  accountId   String
+  propertyId  String?
+  jobId       String?
+  name        String
+  fileUrl     String
+  fileType    String
+  category    DocType
+  processed   Boolean  @default(false)
+
+  chunks      DocumentChunk[]
+
+  createdAt   DateTime @default(now())
+
+  @@map("documents")
+}
+
+model DocumentChunk {
+  id          String   @id @default(uuid())
+  documentId  String
+  content     String   @db.Text
+  embedding   Unsupported("vector(1536)")?
+  chunkIndex  Int
+  metadata    Json?
+
+  document    Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@map("document_chunks")
+}
+
+// ============================================
+// COMMUNICATIONS
+// ============================================
+
+model Communication {
+  id        String   @id @default(uuid())
+  accountId String
+  type      CommType
+  direction CommDirection
+  subject   String?
+  body      String   @db.Text
+  sentBy    String
+  sentTo    String
+  status    CommStatus @default(SENT)
+
+  account   Account @relation(fields: [accountId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@map("communications")
+}
+
+enum CommType {
+  EMAIL
+  SMS
+  CALL
+  PORTAL
+}
+
+enum CommDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum CommStatus {
+  DRAFT
+  SENT
+  FAILED
+  DELIVERED
+}
+
+// ============================================
+// NOTES & AUDIT
+// ============================================
+
+model Note {
+  id        String   @id @default(uuid())
+  jobId     String
+  authorId  String
+  content   String   @db.Text
+
+  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@map("notes")
+}
